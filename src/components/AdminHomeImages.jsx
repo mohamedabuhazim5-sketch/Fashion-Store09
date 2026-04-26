@@ -13,13 +13,18 @@ function fileToDataUrl(file) {
   });
 }
 
-export default function AdminHomeImages({ homeImages = {}, setHomeImages }) {
+export default function AdminHomeImages({ homeImages = {}, setHomeImages = null }) {
   const [uploadingSlot, setUploadingSlot] = useState("");
   const [message, setMessage] = useState("");
   const images = { ...emptyHomeImages, ...(homeImages || {}) };
 
   async function persist(nextImages) {
-    setHomeImages(nextImages);
+    if (typeof setHomeImages === "function") {
+      setHomeImages(nextImages);
+    } else {
+      localStorage.setItem("fashion_home_images", JSON.stringify(nextImages));
+    }
+
     if (isSupabaseConfigured) {
       await saveHomeImagesSupabase(nextImages);
     }
@@ -31,7 +36,7 @@ export default function AdminHomeImages({ homeImages = {}, setHomeImages }) {
       await persist(nextImages);
       setMessage("تم حفظ الصورة بنجاح");
     } catch (error) {
-      setMessage(error.message || "حدث خطأ أثناء حفظ صور الواجهة");
+      setMessage(error.message?.includes("site_settings") ? "لازم تشغل ملف SQL الخاص بصور الواجهة في Supabase الأول" : error.message || "حدث خطأ أثناء حفظ صور الواجهة");
     }
   }
 
@@ -48,7 +53,7 @@ export default function AdminHomeImages({ homeImages = {}, setHomeImages }) {
 
       await updateSlot(key, imageUrl);
     } catch (error) {
-      setMessage(error.message || "حدث خطأ أثناء رفع الصورة");
+      setMessage(error.message?.includes("site_settings") ? "الصورة اترفعت لكن الحفظ يحتاج تشغيل SQL الخاص بصور الواجهة" : error.message || "حدث خطأ أثناء رفع الصورة");
     } finally {
       setUploadingSlot("");
     }
@@ -60,8 +65,13 @@ export default function AdminHomeImages({ homeImages = {}, setHomeImages }) {
 
   async function clearAll() {
     if (!confirm("هل تريد حذف كل صور الواجهة؟")) return;
-    await persist(emptyHomeImages);
-    setMessage("تم حذف كل صور الواجهة");
+
+    try {
+      await persist(emptyHomeImages);
+      setMessage("تم حذف كل صور الواجهة");
+    } catch (error) {
+      setMessage(error.message || "حدث خطأ أثناء حذف صور الواجهة");
+    }
   }
 
   return (

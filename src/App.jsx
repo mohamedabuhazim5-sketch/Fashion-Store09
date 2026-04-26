@@ -314,6 +314,8 @@ export default function App() {
         setOrders={setOrders}
         refreshProducts={refreshProducts}
         refreshOrders={refreshOrders}
+        homeImages={homeImages}
+        setHomeImages={setHomeImages}
       />
     );
   }
