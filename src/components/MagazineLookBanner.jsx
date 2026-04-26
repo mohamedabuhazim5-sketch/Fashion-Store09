@@ -10,9 +10,9 @@ export default function MagazineLookBanner({ homeImages }) {
             <Crown size={17} />
             Magazine Look
           </span>
-          <h2>شكل الصفحة بقى أقرب لكتالوج أزياء بناتي</h2>
+          <h2>Donia</h2>
           <p>
-            بنرات أكبر، صور أوضح، ومحتوى بصري يخلي المتجر يبان كبراند منظم ومريح للعين.
+            اقوي الخصومات.
           </p>
           <a href="#products">
             شوفي المنتجات
