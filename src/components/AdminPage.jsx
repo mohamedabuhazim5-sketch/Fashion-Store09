@@ -16,6 +16,11 @@ import {
   uploadProductImage,
 } from "../services/supabaseService";
 
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
 const emptyProduct = {
   name: "",
   category: "فساتين",
@@ -215,19 +220,27 @@ export default function AdminPage({
 
     try {
       if (isSupabaseConfigured) {
-        if (editingId) {
+        if (editingId && isUuid(editingId)) {
           const saved = await updateProductSupabase(editingId, product);
-          setProducts(products.map((item) => (item.id === editingId ? saved : item)));
+          setProducts((current) => (current || []).map((item) => (String(item.id) === String(editingId) ? saved : item)));
+        } else if (editingId && !isUuid(editingId)) {
+          // منتج قديم/محلي برقم عادي: نضيفه كمنتج جديد في Supabase بدل تحديث id غير UUID
+          const { id: _localId, ...productWithoutLocalId } = product;
+          const saved = await createProductSupabase(productWithoutLocalId);
+          setProducts((current) => [
+            saved,
+            ...(current || []).filter((item) => String(item.id) !== String(editingId)),
+          ]);
         } else {
           const saved = await createProductSupabase(product);
-          setProducts([saved, ...products]);
+          setProducts((current) => [saved, ...(current || [])]);
         }
         await refreshProducts?.();
       } else {
         if (editingId) {
-          setProducts(products.map((item) => (item.id === editingId ? product : item)));
+          setProducts((current) => (current || []).map((item) => (String(item.id) === String(editingId) ? product : item)));
         } else {
-          setProducts([product, ...products]);
+          setProducts((current) => [product, ...(current || [])]);
         }
       }
 
@@ -248,11 +261,13 @@ export default function AdminPage({
     if (!confirm("هل تريد حذف المنتج؟")) return;
 
     try {
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && isUuid(id)) {
         await deleteProductSupabase(id);
         await refreshProducts?.();
       }
-      setProducts(products.filter((product) => product.id !== id));
+
+      // لو المنتج قديم/محلي id بتاعه رقم مثل 1، نحذفه محليًا فقط حتى لا يسبب خطأ UUID في Supabase
+      setProducts((current) => (current || []).filter((product) => String(product.id) !== String(id)));
     } catch (error) {
       alert(error.message || "حدث خطأ أثناء حذف المنتج");
     }
