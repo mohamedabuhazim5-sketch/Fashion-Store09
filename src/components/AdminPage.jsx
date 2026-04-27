@@ -17,6 +17,11 @@ import {
 } from "../services/supabaseService";
 
 
+
+function cleanProductList(list) {
+  return (Array.isArray(list) ? list : []).filter((item) => item && typeof item === "object" && item.id !== null && item.id !== undefined);
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
@@ -67,8 +72,8 @@ function productToForm(product) {
   return {
     ...product,
     oldPrice: product.oldPrice ?? product.old_price,
-    colors: product.colors.join(", "),
-    sizes: product.sizes.join(", "),
+    colors: Array.isArray(product.colors) ? product.colors.join(", ") : String(product.colors || ""),
+    sizes: Array.isArray(product.sizes) ? product.sizes.join(", ") : String(product.sizes || ""),
   };
 }
 
@@ -108,8 +113,8 @@ export default function AdminPage({
 
   const filteredProducts = useMemo(() => {
     const key = query.trim().toLowerCase();
-    if (!key) return (products || []).filter(Boolean);
-    return (products || []).filter(Boolean).filter(
+    if (!key) return cleanProductList(products);
+    return cleanProductList(products).filter(
       (product) =>
         product.name.toLowerCase().includes(key) ||
         product.category.toLowerCase().includes(key)
@@ -136,7 +141,7 @@ export default function AdminPage({
     const safeOrders = (orders || []).filter(Boolean);
     const revenue = safeOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     return {
-      products: (products || []).filter(Boolean).length,
+      products: cleanProductList(products).length,
       orders: safeOrders.length,
       revenue,
       newOrders: safeOrders.filter((order) => order.status === "جديد").length,
@@ -222,25 +227,25 @@ export default function AdminPage({
       if (isSupabaseConfigured) {
         if (editingId && isUuid(editingId)) {
           const saved = await updateProductSupabase(editingId, product);
-          setProducts((current) => (current || []).map((item) => (String(item.id) === String(editingId) ? saved : item)));
+          setProducts((current) => cleanProductList(current).map((item) => (String(item.id) === String(editingId) ? saved : item)));
         } else if (editingId && !isUuid(editingId)) {
           // منتج قديم/محلي برقم عادي: نضيفه كمنتج جديد في Supabase بدل تحديث id غير UUID
           const { id: _localId, ...productWithoutLocalId } = product;
           const saved = await createProductSupabase(productWithoutLocalId);
           setProducts((current) => [
             saved,
-            ...(current || []).filter((item) => String(item.id) !== String(editingId)),
+            ...cleanProductList(current).filter((item) => String(item.id) !== String(editingId)),
           ]);
         } else {
           const saved = await createProductSupabase(product);
-          setProducts((current) => [saved, ...(current || [])]);
+          setProducts((current) => [saved, ...cleanProductList(current)]);
         }
         await refreshProducts?.();
       } else {
         if (editingId) {
-          setProducts((current) => (current || []).map((item) => (String(item.id) === String(editingId) ? product : item)));
+          setProducts((current) => cleanProductList(current).map((item) => (String(item.id) === String(editingId) ? product : item)));
         } else {
-          setProducts((current) => [product, ...(current || [])]);
+          setProducts((current) => [product, ...cleanProductList(current)]);
         }
       }
 
@@ -258,6 +263,7 @@ export default function AdminPage({
   }
 
   async function deleteProduct(id) {
+    if (!id) return;
     if (!confirm("هل تريد حذف المنتج؟")) return;
 
     try {
@@ -266,8 +272,10 @@ export default function AdminPage({
         await refreshProducts?.();
       }
 
-      // لو المنتج قديم/محلي id بتاعه رقم مثل 1، نحذفه محليًا فقط حتى لا يسبب خطأ UUID في Supabase
-      setProducts((current) => (current || []).filter((product) => String(product.id) !== String(id)));
+      // حذف آمن: ينظف null/undefined ويمنع قراءة id من عنصر فاضي
+      setProducts((current) =>
+        cleanProductList(current).filter((product) => String(product.id) !== String(id))
+      );
     } catch (error) {
       alert(error.message || "حدث خطأ أثناء حذف المنتج");
     }
@@ -279,7 +287,7 @@ export default function AdminPage({
       return;
     }
     if (confirm("سيتم حذف المنتجات الحالية ورجوع المنتجات الافتراضية. هل أنت متأكد؟")) {
-      setProducts(defaultProducts);
+      setProducts(cleanProductList(defaultProducts));
     }
   }
 
@@ -681,7 +689,7 @@ export default function AdminPage({
               <h2>قائمة المنتجات</h2>
 
               <div className="admin-products-grid">
-                {(filteredProducts || []).map((product) => (
+                {cleanProductList(filteredProducts).map((product) => (
                   <article className="admin-product-card" key={product.id}>
                     <img src={product.image} alt={product.name} />
                     <div>

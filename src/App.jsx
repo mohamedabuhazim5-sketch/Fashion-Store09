@@ -88,6 +88,13 @@ import ProductVisualGuide from "./components/ProductVisualGuide";
 import StickyBrandNote from "./components/StickyBrandNote";
 import StyleCompare from "./components/StyleCompare";
 import VipWhatsAppPanel from "./components/VipWhatsAppPanel";
+
+function cleanProducts(list) {
+  return (Array.isArray(list) ? list : []).filter(
+    (item) => item && typeof item === "object" && item.id !== null && item.id !== undefined
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState(window.location.hash || "#/");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,6 +110,14 @@ export default function App() {
   const [sort, setSort] = useState("newest");
   const [loading, setLoading] = useState(false);
   const [dataError, setDataError] = useState("");
+
+  useEffect(() => {
+    const cleaned = cleanProducts(products);
+    if (Array.isArray(products) && cleaned.length !== products.length) {
+      setProducts(cleaned);
+    }
+  }, [products, setProducts]);
+
 
   useEffect(() => {
     const onHashChange = () => setRoute(window.location.hash || "#/");
@@ -164,7 +179,7 @@ export default function App() {
     const fallbackImage =
       "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=900&q=80";
 
-    const source = Array.isArray(products) ? products : [];
+    const source = cleanProducts(products);
 
     return source
       .map((product, index) => {
@@ -276,7 +291,7 @@ export default function App() {
 
   if (route.startsWith("#/product/")) {
     const productId = decodeURIComponent(route.replace("#/product/", ""));
-    const product = safeProducts.find((item) => item && String(item.id) === productId);
+    const product = safeProducts.find((item) => item?.id != null && String(item.id) === productId);
     return (
       <ProductDetailsPage
         product={product}
@@ -314,8 +329,6 @@ export default function App() {
         setOrders={setOrders}
         refreshProducts={refreshProducts}
         refreshOrders={refreshOrders}
-        homeImages={homeImages}
-        setHomeImages={setHomeImages}
       />
     );
   }
