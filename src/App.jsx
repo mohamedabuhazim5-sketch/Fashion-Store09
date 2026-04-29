@@ -1,833 +1,470 @@
-import { LogOut, PackagePlus, ShoppingBag, Trash2, Edit3, Save, X, Printer, RotateCcw, Home, Search, BarChart3, UploadCloud, ImagePlus, Download } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { STORE } from "../config/store";
-import AdminHeroUpgrade from "./AdminHeroUpgrade";
-import AdminPolishNotes from "./AdminPolishNotes";
-import AdminHomeImages from "./AdminHomeImages";
-import { defaultProducts } from "../data/defaultProducts";
-import { currency, formatDate } from "../utils/format";
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import {
-  createProductSupabase,
-  deleteProductSupabase,
-  updateProductSupabase,
-  updateOrderStatusSupabase,
-  deleteOrderSupabase,
-  uploadProductImage,
-} from "../services/supabaseService";
+import AnnouncementBar from "./components/AnnouncementBar";
+import Header from "./components/Header";
+import Hero from "./components/Hero";
+import PromoSlider from "./components/PromoSlider";
+import CountdownOffer from "./components/CountdownOffer";
+import ReviewSpotlight from "./components/ReviewSpotlight";
+import InstagramGallery from "./components/InstagramGallery";
+import PromoBanners from "./components/PromoBanners";
+import FeaturedCollections from "./components/FeaturedCollections";
+import Features from "./components/Features";
+import ProductsSection from "./components/ProductsSection";
+import SocialSection from "./components/SocialSection";
+import Footer from "./components/Footer";
+import CartDrawer from "./components/CartDrawer";
+import AdminPage from "./components/AdminPage";
+import ProductModal from "./components/ProductModal";
+import TrackOrder from "./components/TrackOrder";
+import FloatingWhatsApp from "./components/FloatingWhatsApp";
+import ProductDetailsPage from "./components/ProductDetailsPage";
+import WishlistPage from "./components/WishlistPage";
+import DailyDeals from "./components/DailyDeals";
+import CategoryShowcase from "./components/CategoryShowcase";
+import StyleShowcase from "./components/StyleShowcase";
+import CtaBand from "./components/CtaBand";
+import EditorialBanners from "./components/EditorialBanners";
+import LuxuryTestimonials from "./components/LuxuryTestimonials";
+import MobileBottomNav from "./components/MobileBottomNav";
+import TrustSections from "./components/TrustSections";
+import BrandMetrics from "./components/BrandMetrics";
+import LookbookGallery from "./components/LookbookGallery";
+import StylePromise from "./components/StylePromise";
+import BrandStory from "./components/BrandStory";
+import ShopTheLook from "./components/ShopTheLook";
+import PressStrip from "./components/PressStrip";
+import BrandPaletteStrip from "./components/BrandPaletteStrip";
+import PremiumBentoShowcase from "./components/PremiumBentoShowcase";
+import StorePolicies from "./components/StorePolicies";
+import FinalPolishCta from "./components/FinalPolishCta";
+import LuxuryMarquee from "./components/LuxuryMarquee";
+import DesignerPicks from "./components/DesignerPicks";
+import FashionClub from "./components/FashionClub";
+import ScrollToTop from "./components/ScrollToTop";
+import MiniBenefitsRail from "./components/MiniBenefitsRail";
+import SeasonalCollection from "./components/SeasonalCollection";
+import FeaturedProductSpotlight from "./components/FeaturedProductSpotlight";
+import SoftDivider from "./components/SoftDivider";
+import BoutiqueRibbon from "./components/BoutiqueRibbon";
+import OutfitBuilder from "./components/OutfitBuilder";
+import GiftGuide from "./components/GiftGuide";
+import ConversionDock from "./components/ConversionDock";
+import FashionMoodboard from "./components/FashionMoodboard";
+import QuickStyleQuiz from "./components/QuickStyleQuiz";
+import QualityPromise from "./components/QualityPromise";
+import SocialProofWall from "./components/SocialProofWall";
+import CouponCorner from "./components/CouponCorner";
+import FashionStories from "./components/FashionStories";
+import StyleTabsShowcase from "./components/StyleTabsShowcase";
+import RunwayOrderSteps from "./components/RunwayOrderSteps";
+import HomeMicroCta from "./components/HomeMicroCta";
+import MagazineLookBanner from "./components/MagazineLookBanner";
+import LuxeProductRail from "./components/LuxeProductRail";
+import FabricCare from "./components/FabricCare";
+import CustomerJourney from "./components/CustomerJourney";
+import FloatingCouponCard from "./components/FloatingCouponCard";
+import NewDropsBanner from "./components/NewDropsBanner";
+import SizeConfidence from "./components/SizeConfidence";
+import BeforeAfterExperience from "./components/BeforeAfterExperience";
+import BoutiqueFaqStrip from "./components/BoutiqueFaqStrip";
+import { defaultProducts } from "./data/defaultProducts";
+import { emptyHomeImages } from "./config/homeImages";
+import { useLocalState } from "./hooks/useLocalState";
+import { isSupabaseConfigured } from "./lib/supabase";
+import { fetchHomeImagesFromSupabase, fetchOrdersFromSupabase, fetchProductsFromSupabase } from "./services/supabaseService";
 
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("تعذر قراءة الصورة"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function withTimeout(promise, timeoutMs = 25000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error("رفع الصورة أخذ وقت طويل. تأكد من إعدادات Supabase Storage أو جرّب صورة أصغر.")),
-        timeoutMs
-      )
-    ),
-  ]);
-}
-
-const emptyProduct = {
-  name: "",
-  category: "فساتين",
-  price: "",
-  oldPrice: "",
-  tag: "جديد",
-  rating: 4.8,
-  stock: 1,
-  image: "",
-  colors: "وردي, أسود, أبيض",
-  sizes: "S, M, L",
-  description: "",
-};
-
-function normalizeProduct(form, editingId) {
-  return {
-    id: editingId || Date.now(),
-    name: form.name.trim() || "منتج جديد",
-    category: form.category.trim() || "كاجوال",
-    price: Number(form.price) || 0,
-    oldPrice: Number(form.oldPrice) || Number(form.price) || 0,
-    old_price: Number(form.oldPrice) || Number(form.price) || 0,
-    tag: form.tag.trim() || "جديد",
-    rating: Number(form.rating) || 4.8,
-    stock: Number(form.stock) || 0,
-    image:
-      form.image.trim() ||
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-    colors: String(form.colors)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
-    sizes: String(form.sizes)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
-    description: form.description.trim() || "منتج أنيق من Fashion Store.",
-    is_active: form.is_active !== false,
-    sort_order: Number(form.sort_order) || 0,
-  };
-}
-
-function productToForm(product) {
-  return {
-    ...product,
-    oldPrice: product.oldPrice ?? product.old_price,
-    colors: product.colors.join(", "),
-    sizes: product.sizes.join(", "),
-  };
-}
-
-export default function AdminPage({
-  products = [],
-  setProducts,
-  orders = [],
-  setOrders,
-  refreshProducts,
-  refreshOrders,
-  homeImages,
-  setHomeImages,
-}) {
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(!isSupabaseConfigured && localStorage.getItem("fashion_admin") === "yes");
-  const [login, setLogin] = useState({ username: "", email: "", password: "" });
-  const [loginError, setLoginError] = useState("");
-  const [tab, setTab] = useState("products");
-  const [form, setForm] = useState(emptyProduct);
-  const [editingId, setEditingId] = useState(null);
-  const [query, setQuery] = useState("");
-  const [orderQuery, setOrderQuery] = useState("");
-  const [orderStatusFilter, setOrderStatusFilter] = useState("الكل");
-  const [actionError, setActionError] = useState("");
+import SearchHints from "./components/SearchHints";
+import FrequentlyBoughtTogether from "./components/FrequentlyBoughtTogether";
+import CheckoutConfidence from "./components/CheckoutConfidence";
+import BrandValues from "./components/BrandValues";
+import PremiumServiceStrip from "./components/PremiumServiceStrip";
+import BackInStockAlert from "./components/BackInStockAlert";
+import BrandRibbonFinal from "./components/BrandRibbonFinal";
+import BrandTimeline from "./components/BrandTimeline";
+import MaterialDetailShowcase from "./components/MaterialDetailShowcase";
+import OrderConfidenceCards from "./components/OrderConfidenceCards";
+import PersonalShopper from "./components/PersonalShopper";
+import ProductVisualGuide from "./components/ProductVisualGuide";
+import StickyBrandNote from "./components/StickyBrandNote";
+import StyleCompare from "./components/StyleCompare";
+import VipWhatsAppPanel from "./components/VipWhatsAppPanel";
+export default function App() {
+  const [route, setRoute] = useState(window.location.hash || "#/");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [products, setProducts] = useLocalState("fashion_products", defaultProducts);
+  const [orders, setOrders] = useLocalState("fashion_orders", []);
+  const [cart, setCart] = useLocalState("fashion_cart", []);
+  const [wishlist, setWishlist] = useLocalState("fashion_wishlist", []);
+  const [homeImages, setHomeImages] = useLocalState("fashion_home_images", emptyHomeImages);
+  const [activeCategory, setActiveCategory] = useState("الكل");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [loading, setLoading] = useState(false);
+  const [dataError, setDataError] = useState("");
 
   useEffect(() => {
-    async function checkSession() {
-      if (!isSupabaseConfigured) return;
-      const { data } = await supabase.auth.getSession();
-      if (data?.session?.user) {
-        setLoggedIn(true);
-        await refreshProducts?.();
-        await refreshOrders?.();
-      }
-    }
-    checkSession();
+    const onHashChange = () => setRoute(window.location.hash || "#/");
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    const key = query.trim().toLowerCase();
-    if (!key) return (products || []).filter(Boolean);
-    return (products || []).filter(Boolean).filter(
-      (product) =>
-        product.name.toLowerCase().includes(key) ||
-        product.category.toLowerCase().includes(key)
-    );
-  }, [products, query]);
-
-  
-  const filteredOrders = useMemo(() => {
-    const key = orderQuery.trim().toLowerCase();
-
-    return (orders || []).filter(Boolean).filter((order) => {
-      const matchStatus = orderStatusFilter === "الكل" || order.status === orderStatusFilter;
-      const matchSearch =
-        !key ||
-        String(order.orderNumber || "").toLowerCase().includes(key) ||
-        String(order.customer?.name || "").toLowerCase().includes(key) ||
-        String(order.customer?.phone || "").toLowerCase().includes(key);
-
-      return matchStatus && matchSearch;
-    });
-  }, [orders, orderQuery, orderStatusFilter]);
-
-  const stats = useMemo(() => {
-    const safeOrders = (orders || []).filter(Boolean);
-    const revenue = safeOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    return {
-      products: (products || []).filter(Boolean).length,
-      orders: safeOrders.length,
-      revenue,
-      newOrders: safeOrders.filter((order) => order.status === "جديد").length,
-    };
-  }, [products, orders]);
-
-  const recentOrders = useMemo(() => {
-    return (orders || [])
-      .filter(Boolean)
-      .slice()
-      .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0))
-      .slice(0, 4);
-  }, [orders]);
-
-  async function handleLogin(e) {
-    e.preventDefault();
-
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: login.email,
-        password: login.password,
-      });
-
-      if (error) {
-        setLoginError(error.message || "بيانات الدخول غير صحيحة");
-        return;
-      }
-
-      setLoggedIn(true);
-      setLoginError("");
-      await refreshProducts?.();
-      await refreshOrders?.();
-      return;
-    }
-
-    if (
-      login.username === STORE.localAdminUsername &&
-      login.password === STORE.localAdminPassword
-    ) {
-      localStorage.setItem("fashion_admin", "yes");
-      setLoggedIn(true);
-      setLoginError("");
-    } else {
-      setLoginError("بيانات الدخول غير صحيحة");
-    }
-  }
-
-  async function logout() {
-    if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
-    } else {
-      localStorage.removeItem("fashion_admin");
-    }
-    setLoggedIn(false);
-  }
-
-  function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
-  }
-
-
-  async function handleImageUpload(file) {
-    if (!file) return;
-
-    const maxSize = 6 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setActionError("حجم الصورة كبير. اختار صورة أقل من 6MB.");
-      return;
-    }
-
-    setUploadingImage(true);
-    setActionError("");
+  async function refreshProducts() {
+    if (!isSupabaseConfigured) return;
 
     try {
-      // Preview سريع داخل اللوحة حتى لو الرفع على Supabase تأخر
-      const localPreview = await fileToDataUrl(file);
-      updateForm("image", localPreview);
-
-      if (isSupabaseConfigured) {
-        const imageUrl = await withTimeout(uploadProductImage(file), 25000);
-        updateForm("image", imageUrl);
-        setActionError("تم رفع الصورة بنجاح");
-      } else {
-        setActionError("تمت إضافة الصورة محليًا. لظهورها لكل الزوار، اربط Supabase Storage.");
+      setLoading(true);
+      const remoteProducts = await fetchProductsFromSupabase();
+      if (remoteProducts?.length) {
+        setProducts(remoteProducts);
       }
-    } catch (err) {
-      setActionError(
-        err.message ||
-          "الصورة ظهرت مؤقتًا، لكن الرفع على Supabase فشل. تأكد من Bucket: product-images وسياسات Storage."
-      );
+      setDataError("");
+    } catch (error) {
+      setDataError(error.message || "حدث خطأ أثناء تحميل المنتجات من Supabase");
     } finally {
-      setUploadingImage(false);
+      setLoading(false);
     }
   }
 
-  async function saveProduct(e) {
-    e.preventDefault();
-    const product = normalizeProduct(form, editingId);
+  async function refreshOrders() {
+    if (!isSupabaseConfigured) return;
 
     try {
-      if (isSupabaseConfigured) {
-        if (editingId) {
-          const saved = await updateProductSupabase(editingId, product);
-          setProducts(products.map((item) => (item.id === editingId ? saved : item)));
-        } else {
-          const saved = await createProductSupabase(product);
-          setProducts([saved, ...products]);
-        }
-        await refreshProducts?.();
-      } else {
-        if (editingId) {
-          setProducts(products.map((item) => (item.id === editingId ? product : item)));
-        } else {
-          setProducts([product, ...products]);
-        }
+      const remoteOrders = await fetchOrdersFromSupabase();
+      if (remoteOrders) {
+        setOrders(remoteOrders);
       }
-
-      setForm(emptyProduct);
-      setEditingId(null);
+      setDataError("");
     } catch (error) {
-      alert(error.message || "حدث خطأ أثناء حفظ المنتج");
+      setDataError(error.message || "حدث خطأ أثناء تحميل الطلبات من Supabase");
     }
   }
 
-  function editProduct(product) {
-    setEditingId(product.id);
-    setForm(productToForm(product));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  async function deleteProduct(id) {
-    if (!confirm("هل تريد حذف المنتج؟")) return;
+  async function refreshHomeImages() {
+    if (!isSupabaseConfigured) return;
 
     try {
-      if (isSupabaseConfigured) {
-        await deleteProductSupabase(id);
-        await refreshProducts?.();
+      const remoteHomeImages = await fetchHomeImagesFromSupabase();
+      if (remoteHomeImages) {
+        setHomeImages({ ...emptyHomeImages, ...remoteHomeImages });
       }
-      setProducts(products.filter((product) => product.id !== id));
     } catch (error) {
-      alert(error.message || "حدث خطأ أثناء حذف المنتج");
+      console.warn("Home images load error:", error.message);
     }
   }
 
-  function resetProducts() {
-    if (isSupabaseConfigured) {
-      alert("الرجوع للمنتجات الافتراضية متاح في الوضع المحلي فقط. في Supabase احذف أو أضف المنتجات من اللوحة.");
-      return;
-    }
-    if (confirm("سيتم حذف المنتجات الحالية ورجوع المنتجات الافتراضية. هل أنت متأكد؟")) {
-      setProducts(defaultProducts);
-    }
-  }
+  useEffect(() => {
+    refreshProducts();
+    refreshOrders();
+    refreshHomeImages();
+  }, []);
 
-  async function updateOrderStatus(orderId, status) {
-    try {
-      if (isSupabaseConfigured) {
-        await updateOrderStatusSupabase(orderId, status);
-      }
-      setOrders(
-        (filteredOrders || []).map((order) => (order.id === orderId ? { ...order, status } : order))
-      );
-    } catch (error) {
-      alert(error.message || "حدث خطأ أثناء تحديث حالة الطلب");
-    }
-  }
+  const safeProducts = useMemo(() => {
+    const fallbackImage =
+      "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=900&q=80";
 
-  async function deleteOrder(orderId) {
-    if (!confirm("هل تريد حذف الطلب؟")) return;
+    const source = Array.isArray(products) ? products : [];
 
-    try {
-      if (isSupabaseConfigured) {
-        await deleteOrderSupabase(orderId);
-      }
-      setOrders(orders.filter((order) => order.id !== orderId));
-    } catch (error) {
-      alert(error.message || "حدث خطأ أثناء حذف الطلب");
-    }
-  }
+    return source
+      .map((product, index) => {
+        if (!product || typeof product !== "object") return null;
 
+        const price = Number(product.price ?? 0);
+        const oldPrice = Number(product.oldPrice ?? product.old_price ?? price);
 
-  function exportOrdersCsv() {
-    const rows = [
-      [
-        "Order Number",
-        "Date",
-        "Customer",
-        "Phone",
-        "City",
-        "Status",
-        "Subtotal",
-        "Discount",
-        "Shipping",
-        "Total",
-        "Coupon",
-      ],
-      ...(filteredOrders || []).map((order) => [
-        order.orderNumber,
-        formatDate(order.createdAt),
-        order.customer?.name || "",
-        order.customer?.phone || "",
-        order.customer?.city || "",
-        order.status,
-        order.subtotal || order.total,
-        order.discount || 0,
-        order.shippingFee || 0,
-        order.total,
-        order.couponCode || "",
-      ]),
-    ];
+        return {
+          ...product,
+          id: product.id ?? `local-${index + 1}`,
+          name: product.name || "منتج Fashion Store",
+          category: product.category || "كاجوال",
+          price: Number.isFinite(price) ? price : 0,
+          oldPrice: Number.isFinite(oldPrice) ? oldPrice : price || 0,
+          tag: product.tag || "جديد",
+          rating: Number.isFinite(Number(product.rating)) ? Number(product.rating) : 4.8,
+          stock: Number.isFinite(Number(product.stock)) ? Number(product.stock) : 0,
+          image: product.image || product.image_url || fallbackImage,
+          colors: Array.isArray(product.colors) && product.colors.length ? product.colors : ["وردي"],
+          sizes: Array.isArray(product.sizes) && product.sizes.length ? product.sizes : ["One Size"],
+          description: product.description || "قطعة مميزة من Fashion Store.",
+          is_active: product.is_active !== false,
+          sort_order: Number.isFinite(Number(product.sort_order)) ? Number(product.sort_order) : index + 1,
+        };
+      })
+      .filter(Boolean);
+  }, [products]);
 
-    const csv = rows
-      .map((row) =>
-        row
-          .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
+  const filteredProducts = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
 
-    const blob = new Blob(["\ufeff" + csv], {
-      type: "text/csv;charset=utf-8;",
+    const result = safeProducts.filter((product) => {
+      if (!product) return false;
+
+      const matchCategory = activeCategory === "الكل" || product.category === activeCategory;
+      const name = String(product.name || "").toLowerCase();
+      const category = String(product.category || "").toLowerCase();
+      const description = String(product.description || "").toLowerCase();
+
+      const matchSearch =
+        !keyword ||
+        name.includes(keyword) ||
+        category.includes(keyword) ||
+        description.includes(keyword);
+
+      return matchCategory && matchSearch && product.is_active !== false;
     });
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fashion-store-orders-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return [...result].sort((a, b) => {
+      if (sort === "low") return Number(a.price || 0) - Number(b.price || 0);
+      if (sort === "high") return Number(b.price || 0) - Number(a.price || 0);
+      if (sort === "rating") return Number(b.rating || 0) - Number(a.rating || 0);
+      return Number(a.sort_order || 9999) - Number(b.sort_order || 9999);
+    });
+  }, [safeProducts, activeCategory, search, sort]);
+
+  const safeCart = useMemo(() => (Array.isArray(cart) ? cart.filter(Boolean) : []), [cart]);
+  const safeWishlist = useMemo(
+    () => (Array.isArray(wishlist) ? wishlist.filter(Boolean).map(String) : []),
+    [wishlist]
+  );
+
+  const cartCount = useMemo(
+    () => safeCart.reduce((sum, item) => sum + Number(item?.qty || 0), 0),
+    [safeCart]
+  );
+
+  function isFavorite(productId) {
+    return safeWishlist.includes(String(productId));
   }
 
-  function printOrder(order) {
-    const itemsRows = order.items
-      .map(
-        (item) => `
-          <tr>
-            <td>${item.name}<br><small>${item.size} / ${item.color}</small></td>
-            <td>${item.qty}</td>
-            <td>${currency(item.price * item.qty)}</td>
-          </tr>
-        `
-      )
-      .join("");
-
-    const html = `
-      <!doctype html>
-      <html lang="ar" dir="rtl">
-        <head>
-          <meta charset="UTF-8" />
-          <title>${order.orderNumber || order.order_number || 'طلب'}</title>
-          <style>
-            @page { size: 80mm auto; margin: 4mm; }
-            body { width: 72mm; margin: 0 auto; font-family: Arial, sans-serif; color: #111; direction: rtl; }
-            .receipt { padding: 6px; }
-            h1 { font-size: 18px; text-align: center; margin: 0; }
-            .sub { text-align: center; font-size: 11px; margin: 4px 0 10px; }
-            .line { border-top: 1px dashed #111; margin: 8px 0; }
-            p { margin: 4px 0; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; }
-            th, td { padding: 5px 2px; border-bottom: 1px dashed #999; vertical-align: top; }
-            th { text-align: right; }
-            .total { font-size: 15px; font-weight: bold; display: flex; justify-content: space-between; margin-top: 8px; }
-            .thanks { text-align: center; margin-top: 10px; font-weight: bold; }
-            small { font-size: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            <h1>${STORE.name}</h1>
-            <div class="sub">${STORE.whatsappDisplay}</div>
-            <div class="line"></div>
-            <p><b>رقم الطلب:</b> ${order.orderNumber || order.order_number || 'طلب'}</p>
-            <p><b>التاريخ:</b> ${formatDate(order.createdAt)}</p>
-            <p><b>العميلة:</b> ${order.customer.name || "-"}</p>
-            <p><b>الموبايل:</b> ${order.customer.phone || "-"}</p>
-            <p><b>العنوان:</b> ${order.customer.city || ""} - ${order.customer.address || ""}</p>
-            <div class="line"></div>
-            <table>
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>كمية</th>
-                  <th>السعر</th>
-                </tr>
-              </thead>
-              <tbody>${itemsRows}</tbody>
-            </table>
-            <div class="total"><span>Subtotal</span><span>${currency(order.subtotal || order.total)}</span></div>
-            <div class="total"><span>الخصم</span><span>- ${currency(order.discount || 0)}</span></div>
-            <div class="total"><span>الشحن</span><span>${currency(order.shippingFee || 0)}</span></div>
-            <div class="total"><span>الإجمالي</span><span>${currency(order.total)}</span></div>
-            <div class="line"></div>
-            <p><b>ملاحظات:</b> ${order.customer.notes || "لا يوجد"}</p>
-            <p class="thanks">شكرًا لطلبك من Fashion Store 💗</p>
-          </div>
-          <script>window.print();</script>
-        </body>
-      </html>
-    `;
-
-    const win = window.open("", "_blank", "width=420,height=700");
-    win.document.write(html);
-    win.document.close();
+  function toggleWishlist(productId) {
+    const id = String(productId);
+    setWishlist((prev) => {
+      const list = Array.isArray(prev) ? prev.map(String) : [];
+      return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+    });
   }
 
-  if (!loggedIn) {
+  function addToCart(product, size, color) {
+    const stock = Number(product.stock || 0);
+    if (stock <= 0) {
+      alert("المنتج نفذت كميته حاليًا");
+      return;
+    }
+
+    const key = `${product.id}-${size}-${color}`;
+
+    setCart((prev) => {
+      const existing = prev.find((item) => item.key === key);
+
+      if (existing) {
+        if (Number(existing.qty) >= stock) {
+          alert("لا يمكن إضافة كمية أكبر من المخزون المتاح");
+          return prev;
+        }
+
+        return prev.map((item) =>
+          item.key === key ? { ...item, qty: Number(item.qty) + 1 } : item
+        );
+      }
+
+      return [...prev, { ...product, size, color, qty: 1, key }];
+    });
+
+    setCartOpen(true);
+  }
+
+  if (route.startsWith("#/product/")) {
+    const productId = decodeURIComponent(route.replace("#/product/", ""));
+    const product = safeProducts.find((item) => item && String(item.id) === productId);
     return (
-      <main className="admin-login-page">
-        <form className="admin-login-card" onSubmit={handleLogin}>
-          <a href="#/" className="back-home-link">
-            <Home size={18} />
-            رجوع للمتجر
-          </a>
+      <ProductDetailsPage
+        product={product}
+        products={safeProducts}
+        onAdd={addToCart}
+        wishlist={safeWishlist}
+        onToggleWishlist={toggleWishlist}
+        isFavorite={isFavorite}
+      />
+    );
+  }
 
-          <div className="login-logo">
-            <ShoppingBag />
-          </div>
+  if (route === "#/wishlist") {
+    return (
+      <WishlistPage
+        products={safeProducts}
+        wishlist={safeWishlist}
+        onAdd={addToCart}
+        onView={setSelectedProduct}
+        onToggleWishlist={toggleWishlist}
+      />
+    );
+  }
 
-          <h1>لوحة تحكم Fashion Store</h1>
-          <p>{isSupabaseConfigured ? "سجّل دخول بإيميل الأدمن في Supabase." : "ادخل بيانات الأدمن لإدارة المنتجات والطلبات."}</p>
+  if (route === "#/track") {
+    return <TrackOrder />;
+  }
 
-          {loginError && <div className="login-error">{loginError}</div>}
-
-          {isSupabaseConfigured ? (
-            <input
-              type="email"
-              value={login.email}
-              onChange={(e) => setLogin({ ...login, email: e.target.value })}
-              placeholder="إيميل الأدمن"
-            />
-          ) : (
-            <input
-              value={login.username}
-              onChange={(e) => setLogin({ ...login, username: e.target.value })}
-              placeholder="اسم المستخدم"
-            />
-          )}
-          <input
-            type="password"
-            value={login.password}
-            onChange={(e) => setLogin({ ...login, password: e.target.value })}
-            placeholder="كلمة المرور"
-          />
-
-          <button type="submit">دخول لوحة التحكم</button>
-
-          {!isSupabaseConfigured && (
-            <div className="admin-hint">
-              Username: <b>admin</b> / Password: <b>123456</b>
-            </div>
-          )}
-        </form>
-      </main>
+  if (route === "#/admin") {
+    return (
+      <AdminPage
+        products={safeProducts}
+        setProducts={setProducts}
+        orders={orders}
+        setOrders={setOrders}
+        refreshProducts={refreshProducts}
+        refreshOrders={refreshOrders}
+      />
     );
   }
 
   return (
-    <main className="admin-page">
-      <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <ShoppingBag />
-          <div>
-            <strong>{STORE.name}</strong>
-            <span>Admin Dashboard</span>
-          </div>
-        </div>
+    <main>
+      <AnnouncementBar />
+      <Header
+        cartCount={cartCount}
+        wishlistCount={safeWishlist.length}
+        onCartOpen={() => setCartOpen(true)}
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+      />
 
-        <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>
-          <PackagePlus />
-          المنتجات
-        </button>
+      {dataError && <div className="global-error">{dataError}</div>}
 
-        <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>
-          <ShoppingBag />
-          الطلبات
-        </button>
+      <Hero />
+      <PressStrip />
+      <LuxuryMarquee />
+      <FashionStories />
+      <SearchHints />
+      <MagazineLookBanner homeImages={homeImages} />
+      <MaterialDetailShowcase homeImages={homeImages} />
+      <NewDropsBanner />
+      <BrandPaletteStrip />
+      <MiniBenefitsRail />
+      <BrandMetrics />
+      <CategoryShowcase />
+      <SeasonalCollection homeImages={homeImages} />
+      <BoutiqueRibbon homeImages={homeImages} />
+      <FashionMoodboard homeImages={homeImages} />
+      <BrandStory homeImages={homeImages} />
+      <StyleTabsShowcase homeImages={homeImages} />
+      <StyleCompare homeImages={homeImages} />
+      <ProductVisualGuide />
+      <FeaturedProductSpotlight products={safeProducts} />
+      <LuxeProductRail products={safeProducts} />
+      <FrequentlyBoughtTogether products={safeProducts} />
+      <DesignerPicks products={safeProducts} />
+      <PremiumBentoShowcase homeImages={homeImages} />
+      <EditorialBanners />
+      <StyleShowcase />
+      <ShopTheLook homeImages={homeImages} />
+      <OutfitBuilder homeImages={homeImages} />
+      <QuickStyleQuiz />
+      <RunwayOrderSteps />
+      <CountdownOffer />
+      <PromoSlider />
+      <Features />
+      <PromoBanners />
+      <CouponCorner />
 
-        <button className={tab === "homeImages" ? "active" : ""} onClick={() => setTab("homeImages")}>
-          <ImagePlus />
-          صور الواجهة
-        </button>
+      <DailyDeals
+        products={safeProducts}
+        onAdd={addToCart}
+        onView={setSelectedProduct}
+        isFavorite={isFavorite}
+        onToggleWishlist={toggleWishlist}
+      />
+      <FeaturedCollections
+        products={safeProducts}
+        onAdd={addToCart}
+        onView={setSelectedProduct}
+        isFavorite={isFavorite}
+        onToggleWishlist={toggleWishlist}
+      />
 
-        <a href="#/">
-          <Home />
-          فتح المتجر
-        </a>
+      <SoftDivider />
 
-        <button onClick={logout}>
-          <LogOut />
-          تسجيل خروج
-        </button>
-      </aside>
+      <ProductsSection
+        filteredProducts={filteredProducts}
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+        search={search}
+        setSearch={setSearch}
+        sort={sort}
+        setSort={setSort}
+        onAdd={addToCart}
+        onView={setSelectedProduct}
+        loading={loading}
+        totalCount={safeProducts.filter((item) => item && item.is_active !== false).length}
+        isFavorite={isFavorite}
+        onToggleWishlist={toggleWishlist}
+      />
 
-      <section className="admin-content admin-content-v12">
-        <div className="admin-topbar">
-          <div>
-            <span>Fashion Store</span>
-            <h1>لوحة التحكم</h1>
-          </div>
+      <ReviewSpotlight />
+      <SocialProofWall />
+      <LuxuryTestimonials />
+      <LookbookGallery homeImages={homeImages} />
+      <TrustSections />
+      <InstagramGallery />
+      <BeforeAfterExperience />
+      <CustomerJourney />
+      <CheckoutConfidence />
+      <OrderConfidenceCards />
+      <BackInStockAlert />
+      <BoutiqueFaqStrip />
+      <StorePolicies />
+      <QualityPromise />
+      <SizeConfidence />
+      <FabricCare />
+      <GiftGuide />
+      <PersonalShopper />
+      <VipWhatsAppPanel />
+      <FashionClub />
+      <StylePromise />
+      <BrandTimeline />
+      <BrandValues />
+      <PremiumServiceStrip />
+      <HomeMicroCta />
+      <FinalPolishCta />
+      <BrandRibbonFinal />
+      <CtaBand />
+      <SocialSection />
+      <Footer />
 
-          <div className="admin-search">
-            <Search size={18} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="بحث في المنتجات..."
-            />
-          </div>
-        </div>
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        cart={cart}
+        setCart={setCart}
+        orders={orders}
+        setOrders={setOrders}
+        refreshOrders={refreshOrders}
+      />
 
-        <AdminHeroUpgrade
-          productsCount={stats.products}
-          ordersCount={stats.orders}
-          newOrdersCount={stats.newOrders}
-        />
+      <FloatingWhatsApp />
+      <ScrollToTop />
+      <FloatingCouponCard />
+      <StickyBrandNote />
 
-        <AdminPolishNotes />
+      <ConversionDock
+        cartCount={cartCount}
+        wishlistCount={safeWishlist.length}
+        onCartOpen={() => setCartOpen(true)}
+      />
 
-        <div className="stats-grid">
-          <div>
-            <BarChart3 />
-            <span>عدد المنتجات</span>
-            <strong>{stats.products}</strong>
-          </div>
-          <div>
-            <ShoppingBag />
-            <span>عدد الطلبات</span>
-            <strong>{stats.orders}</strong>
-          </div>
-          <div>
-            <PackagePlus />
-            <span>طلبات جديدة</span>
-            <strong>{stats.newOrders}</strong>
-          </div>
-          <div>
-            <BarChart3 />
-            <span>إجمالي المبيعات</span>
-            <strong>{currency(stats.revenue)}</strong>
-          </div>
-        </div>
+      <MobileBottomNav
+        cartCount={cartCount}
+        wishlistCount={safeWishlist.length}
+        onCartOpen={() => setCartOpen(true)}
+      />
 
-        <div className="admin-insights-grid">
-          <div className="admin-insight-card">
-            <h3>نظرة سريعة</h3>
-            <p>من هنا تقدري تديري المنتجات، تراجعي الأوردرات، وتتابعي الأداء بشكل أسرع.</p>
-            <div className="admin-insight-actions">
-              <button type="button" onClick={() => setTab("products")}>إدارة المنتجات</button>
-              <button type="button" onClick={() => setTab("orders")}>متابعة الطلبات</button>
-            </div>
-          </div>
-
-          <div className="admin-insight-card">
-            <h3>آخر الطلبات</h3>
-            {recentOrders.length ? (
-              <div className="recent-orders-list">
-                {(recentOrders || []).map((order) => (
-                  <div className="recent-order-item" key={order.id || order.orderNumber || order.order_number}>
-                    <div>
-                      <strong>{order.orderNumber || order.order_number || 'طلب'}</strong>
-                      <span>{order.customer?.name || order.customer_name || "عميلة"} • {order.status || "جديد"}</span>
-                    </div>
-                    <b>{currency(order.total || 0)}</b>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="no-recent-orders">لا توجد طلبات بعد.</p>
-            )}
-          </div>
-        </div>
-
-        {tab === "homeImages" && (
-          <AdminHomeImages homeImages={homeImages} setHomeImages={setHomeImages} />
-        )}
-
-        {tab === "products" && (
-          <>
-            <form className="admin-form" onSubmit={saveProduct}>
-              <div className="form-head">
-                <h2>{editingId ? "تعديل منتج" : "إضافة منتج جديد"}</h2>
-
-                {editingId && (
-                  <button
-                    type="button"
-                    className="cancel-edit"
-                    onClick={() => {
-                      setEditingId(null);
-                      setForm(emptyProduct);
-                    }}
-                  >
-                    <X size={18} />
-                    إلغاء
-                  </button>
-                )}
-              </div>
-
-              <div className="admin-form-grid">
-                <input value={form.name} onChange={(e) => updateForm("name", e.target.value)} placeholder="اسم المنتج" />
-                <input value={form.category} onChange={(e) => updateForm("category", e.target.value)} placeholder="القسم" />
-                <input type="number" value={form.price} onChange={(e) => updateForm("price", e.target.value)} placeholder="السعر" />
-                <input type="number" value={form.oldPrice} onChange={(e) => updateForm("oldPrice", e.target.value)} placeholder="السعر قبل الخصم" />
-                <input value={form.tag} onChange={(e) => updateForm("tag", e.target.value)} placeholder="بادج المنتج مثل جديد" />
-                <input type="number" step="0.1" value={form.rating} onChange={(e) => updateForm("rating", e.target.value)} placeholder="التقييم" />
-                <input type="number" value={form.stock} onChange={(e) => updateForm("stock", e.target.value)} placeholder="المخزون" />
-                <input value={form.sizes} onChange={(e) => updateForm("sizes", e.target.value)} placeholder="المقاسات: S, M, L" />
-                <input value={form.colors} onChange={(e) => updateForm("colors", e.target.value)} placeholder="الألوان: وردي, أسود" />
-                
-                <div className="image-upload-box">
-                  <label className="upload-btn">
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      onChange={(e) => handleImageUpload(e.target.files?.[0])}
-                    />
-                    <UploadCloud size={18} />
-                    {uploadingImage ? "جاري رفع الصورة..." : "رفع صورة المنتج"}
-                  </label>
-
-                  {form.image ? (
-                    <div className="image-preview">
-                      <img src={form.image} alt="Product preview" />
-                      <span>تم اختيار الصورة</span>
-                    </div>
-                  ) : (
-                    <div className="image-preview empty">
-                      <ImagePlus size={24} />
-                      <span>لم يتم اختيار صورة</span>
-                    </div>
-                  )}
-                </div>
-
-                {actionError && <div className="admin-action-message">{actionError}</div>}
-
-                <input value={form.image} onChange={(e) => updateForm("image", e.target.value)} placeholder="أو ضع رابط الصورة يدويًا" />
-
-                <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="وصف المنتج" />
-              </div>
-
-              <div className="admin-form-actions">
-                <button type="submit">
-                  <Save size={18} />
-                  {editingId ? "حفظ التعديل" : "إضافة المنتج"}
-                </button>
-                <button type="button" className="reset-btn" onClick={resetProducts}>
-                  <RotateCcw size={18} />
-                  رجوع المنتجات الافتراضية
-                </button>
-              </div>
-            </form>
-
-            <div className="admin-table-card">
-              <h2>قائمة المنتجات</h2>
-
-              <div className="admin-products-grid">
-                {(filteredProducts || []).map((product) => (
-                  <article className="admin-product-card" key={product.id}>
-                    <img src={product.image} alt={product.name} />
-                    <div>
-                      <span>{product.category}</span>
-                      <h3>{product.name}</h3>
-                      <p>{currency(product.price)} - مخزون {product.stock ?? 0} {Number(product.stock || 0) <= 3 && <b className="low-stock-admin">مخزون منخفض</b>}</p>
-                    </div>
-                    <div className="admin-product-actions">
-                      <button onClick={() => editProduct(product)}>
-                        <Edit3 size={17} />
-                        تعديل
-                      </button>
-                      <button className="danger" onClick={() => deleteProduct(product.id)}>
-                        <Trash2 size={17} />
-                        حذف
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {tab === "orders" && (
-          <div className="admin-table-card">
-            <div className="orders-toolbar">
-              <h2>الطلبات</h2>
-
-              <div className="orders-tools">
-                <input
-                  value={orderQuery}
-                  onChange={(e) => setOrderQuery(e.target.value)}
-                  placeholder="بحث برقم الطلب / الاسم / الموبايل"
-                />
-                <select
-                  value={orderStatusFilter}
-                  onChange={(e) => setOrderStatusFilter(e.target.value)}
-                >
-                  <option>الكل</option>
-                  <option>جديد</option>
-                  <option>قيد التجهيز</option>
-                  <option>تم الشحن</option>
-                  <option>تم التسليم</option>
-                  <option>ملغي</option>
-                </select>
-                <button onClick={exportOrdersCsv}>
-                  <Download size={17} />
-                  تصدير CSV
-                </button>
-              </div>
-            </div>
-
-            {!filteredOrders.length ? (
-              <div className="empty-products">
-                <h3>لا يوجد طلبات حتى الآن</h3>
-                <p>أي طلب يتم إرساله من السلة سيتم تسجيله هنا.</p>
-              </div>
-            ) : (
-              <div className="orders-list">
-                {(filteredOrders || []).map((order) => (
-                  <article className="order-card" key={order.id || order.orderNumber || order.order_number}>
-                    <div className="order-head">
-                      <div>
-                        <span>{order.orderNumber || order.order_number || 'طلب'}</span>
-                        <h3>{order.customer.name || "عميلة بدون اسم"}</h3>
-                        <p>{formatDate(order.createdAt)}</p>
-                      </div>
-
-                      <strong>{currency(order.total)}</strong>
-                    </div>
-
-                    <div className="order-meta">
-                      <p><b>الموبايل:</b> {order.customer.phone || "-"}</p>
-                      <p><b>المدينة:</b> {order.customer.city || "-"}</p>
-                      <p><b>العنوان:</b> {order.customer.address || "-"}</p>
-                      <p><b>ملاحظات:</b> {order.customer.notes || "لا يوجد"}</p>
-                      <p><b>كود الخصم:</b> {order.couponCode || "لا يوجد"}</p>
-                    </div>
-
-                    <div className="order-items">
-                      {order.items.map((item) => (
-                        <div key={item.key}>
-                          <span>{item.name}</span>
-                          <small>{item.size} / {item.color} × {item.qty}</small>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="order-actions">
-                      <select
-                        value={order.status}
-                        onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                      >
-                        <option>جديد</option>
-                        <option>قيد التجهيز</option>
-                        <option>تم الشحن</option>
-                        <option>تم التسليم</option>
-                        <option>ملغي</option>
-                      </select>
-
-                      <button onClick={() => printOrder(order)}>
-                        <Printer size={17} />
-                        طباعة فاتورة
-                      </button>
-
-                      <button className="danger" onClick={() => deleteOrder(order.id)}>
-                        <Trash2 size={17} />
-                        حذف
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      <ProductModal
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        onAdd={addToCart}
+        isFavorite={selectedProduct ? isFavorite(selectedProduct.id) : false}
+        onToggleFavorite={() => selectedProduct && toggleWishlist(selectedProduct.id)}
+      />
     </main>
   );
 }

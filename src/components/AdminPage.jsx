@@ -17,13 +17,25 @@ import {
 } from "../services/supabaseService";
 
 
-
-function cleanProductList(list) {
-  return (Array.isArray(list) ? list : []).filter((item) => item && typeof item === "object" && item.id !== null && item.id !== undefined);
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+    reader.readAsDataURL(file);
+  });
 }
 
-function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+function withTimeout(promise, timeoutMs = 25000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("رفع الصورة أخذ وقت طويل. تأكد من إعدادات Supabase Storage أو جرّب صورة أصغر.")),
+        timeoutMs
+      )
+    ),
+  ]);
 }
 
 const emptyProduct = {
@@ -72,8 +84,8 @@ function productToForm(product) {
   return {
     ...product,
     oldPrice: product.oldPrice ?? product.old_price,
-    colors: Array.isArray(product.colors) ? product.colors.join(", ") : String(product.colors || ""),
-    sizes: Array.isArray(product.sizes) ? product.sizes.join(", ") : String(product.sizes || ""),
+    colors: product.colors.join(", "),
+    sizes: product.sizes.join(", "),
   };
 }
 
@@ -97,6 +109,7 @@ export default function AdminPage({
   const [query, setQuery] = useState("");
   const [orderQuery, setOrderQuery] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("الكل");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     async function checkSession() {
@@ -113,8 +126,8 @@ export default function AdminPage({
 
   const filteredProducts = useMemo(() => {
     const key = query.trim().toLowerCase();
-    if (!key) return cleanProductList(products);
-    return cleanProductList(products).filter(
+    if (!key) return (products || []).filter(Boolean);
+    return (products || []).filter(Boolean).filter(
       (product) =>
         product.name.toLowerCase().includes(key) ||
         product.category.toLowerCase().includes(key)
@@ -141,7 +154,7 @@ export default function AdminPage({
     const safeOrders = (orders || []).filter(Boolean);
     const revenue = safeOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     return {
-      products: cleanProductList(products).length,
+      products: (products || []).filter(Boolean).length,
       orders: safeOrders.length,
       revenue,
       newOrders: safeOrders.filter((order) => order.status === "جديد").length,
@@ -206,14 +219,32 @@ export default function AdminPage({
   async function handleImageUpload(file) {
     if (!file) return;
 
+    const maxSize = 6 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setActionError("حجم الصورة كبير. اختار صورة أقل من 6MB.");
+      return;
+    }
+
     setUploadingImage(true);
     setActionError("");
 
     try {
-      const imageUrl = await uploadProductImage(file);
-      updateForm("image", imageUrl);
+      // Preview سريع داخل اللوحة حتى لو الرفع على Supabase تأخر
+      const localPreview = await fileToDataUrl(file);
+      updateForm("image", localPreview);
+
+      if (isSupabaseConfigured) {
+        const imageUrl = await withTimeout(uploadProductImage(file), 25000);
+        updateForm("image", imageUrl);
+        setActionError("تم رفع الصورة بنجاح");
+      } else {
+        setActionError("تمت إضافة الصورة محليًا. لظهورها لكل الزوار، اربط Supabase Storage.");
+      }
     } catch (err) {
-      setActionError(err.message || "حدث خطأ أثناء رفع الصورة");
+      setActionError(
+        err.message ||
+          "الصورة ظهرت مؤقتًا، لكن الرفع على Supabase فشل. تأكد من Bucket: product-images وسياسات Storage."
+      );
     } finally {
       setUploadingImage(false);
     }
@@ -225,27 +256,19 @@ export default function AdminPage({
 
     try {
       if (isSupabaseConfigured) {
-        if (editingId && isUuid(editingId)) {
+        if (editingId) {
           const saved = await updateProductSupabase(editingId, product);
-          setProducts((current) => cleanProductList(current).map((item) => (String(item.id) === String(editingId) ? saved : item)));
-        } else if (editingId && !isUuid(editingId)) {
-          // منتج قديم/محلي برقم عادي: نضيفه كمنتج جديد في Supabase بدل تحديث id غير UUID
-          const { id: _localId, ...productWithoutLocalId } = product;
-          const saved = await createProductSupabase(productWithoutLocalId);
-          setProducts((current) => [
-            saved,
-            ...cleanProductList(current).filter((item) => String(item.id) !== String(editingId)),
-          ]);
+          setProducts(products.map((item) => (item.id === editingId ? saved : item)));
         } else {
           const saved = await createProductSupabase(product);
-          setProducts((current) => [saved, ...cleanProductList(current)]);
+          setProducts([saved, ...products]);
         }
         await refreshProducts?.();
       } else {
         if (editingId) {
-          setProducts((current) => cleanProductList(current).map((item) => (String(item.id) === String(editingId) ? product : item)));
+          setProducts(products.map((item) => (item.id === editingId ? product : item)));
         } else {
-          setProducts((current) => [product, ...cleanProductList(current)]);
+          setProducts([product, ...products]);
         }
       }
 
@@ -263,19 +286,14 @@ export default function AdminPage({
   }
 
   async function deleteProduct(id) {
-    if (!id) return;
     if (!confirm("هل تريد حذف المنتج؟")) return;
 
     try {
-      if (isSupabaseConfigured && isUuid(id)) {
+      if (isSupabaseConfigured) {
         await deleteProductSupabase(id);
         await refreshProducts?.();
       }
-
-      // حذف آمن: ينظف null/undefined ويمنع قراءة id من عنصر فاضي
-      setProducts((current) =>
-        cleanProductList(current).filter((product) => String(product.id) !== String(id))
-      );
+      setProducts(products.filter((product) => product.id !== id));
     } catch (error) {
       alert(error.message || "حدث خطأ أثناء حذف المنتج");
     }
@@ -287,7 +305,7 @@ export default function AdminPage({
       return;
     }
     if (confirm("سيتم حذف المنتجات الحالية ورجوع المنتجات الافتراضية. هل أنت متأكد؟")) {
-      setProducts(cleanProductList(defaultProducts));
+      setProducts(defaultProducts);
     }
   }
 
@@ -668,6 +686,8 @@ export default function AdminPage({
                   )}
                 </div>
 
+                {actionError && <div className="admin-action-message">{actionError}</div>}
+
                 <input value={form.image} onChange={(e) => updateForm("image", e.target.value)} placeholder="أو ضع رابط الصورة يدويًا" />
 
                 <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="وصف المنتج" />
@@ -689,7 +709,7 @@ export default function AdminPage({
               <h2>قائمة المنتجات</h2>
 
               <div className="admin-products-grid">
-                {cleanProductList(filteredProducts).map((product) => (
+                {(filteredProducts || []).map((product) => (
                   <article className="admin-product-card" key={product.id}>
                     <img src={product.image} alt={product.name} />
                     <div>
